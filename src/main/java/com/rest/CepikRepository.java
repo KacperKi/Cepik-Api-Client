@@ -21,12 +21,7 @@ public class CepikRepository {
 
     public JsonObject getPojazdy(String wojewodztwo, String dataod, String datado){
         try {
-            System.out.println("Stat in getPojazdy - CepikRepository\n" +
-                    "Region Number: " + wojewodztwo +
-                    "\nStart od: " + dataod +
-                    "\nStart do: " + datado);
             Response<JsonObject> response= cepikApi.getAllPojazdy(wojewodztwo, dataod, datado).execute();
-
             if (response.isSuccessful()) {
                 System.out.println("getAll()-success, code: " + response.code() + ", body: " + response.body());
                 return response.body();

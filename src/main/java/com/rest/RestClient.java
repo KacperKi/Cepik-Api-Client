@@ -1,30 +1,18 @@
 package com.rest;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonMappingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import org.jdatepicker.impl.JDatePanelImpl;
 import org.jdatepicker.impl.JDatePickerImpl;
 import org.jdatepicker.impl.UtilDateModel;
 import org.json.JSONArray;
 import org.json.JSONObject;
-import org.jdatepicker.*;
 
 import javax.swing.*;
-import javax.swing.border.Border;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Properties;
+import java.util.*;
 
 public class RestClient {
 
@@ -33,18 +21,20 @@ public class RestClient {
             add("marka");add("kategoria");add("typ");add("model");add("wariant");add("rodzaj");add("pochodzenie");add("rok");add("dataResjestracji");add("pojemnosc");add("masa");add("paliwo");
         }
     };
+    ArrayList<ArrayList<String>> daneDoTabeli = new ArrayList<>();
+    ArrayList<ArrayList<String>> dataFromAPI = new ArrayList<>();
+
     JFrame userFrame;
     JTable tableWithData;
     JScrollPane scrollPane;
     DefaultTableModel model;
     JLabel startDateInfo, endDateInfo, numberOfRows, regionInfo;
     JComboBox regionNumber;
-    JButton getDateFromAPI;
-
+    JButton getDateFromAPI, filterByProducer;
     JDatePanelImpl startDatePanel, endDatePanel;
     JDatePickerImpl startDate, endDate;
     UtilDateModel modelStartDate, modelEndDate;
-
+    JTextField producerName;
     CepikRepository cepikRepository;
 
     private String datePattern = "yyyy-MM-dd";
@@ -58,15 +48,20 @@ public class RestClient {
         cepikRepository = new CepikRepository();
 
     }
-
     void CreateClientFrame(){
         userFrame = new JFrame("Integracja Systemów - Aplikacja Klienta - Kacper Kisielewski");
-        userFrame.setSize(1280, 120);
+        userFrame.setSize(1280, 130);
 
         CreateDatePickers();
+        CreateFilterField();
 
         getDateFromAPI = new JButton("Get Data From API");
         getDateFromAPI.setBounds(900,10,150,28);
+
+        numberOfRows = new JLabel();
+        numberOfRows.setBounds(820,10,80,28);
+        numberOfRows.setText("Rows:  0");
+        userFrame.add(numberOfRows);
 
         userFrame.add(getDateFromAPI);
 
@@ -77,7 +72,6 @@ public class RestClient {
 
         CreateListener();
     }
-
     void CreateListener(){
         getDateFromAPI.addActionListener(new ActionListener() {
             @Override
@@ -86,104 +80,140 @@ public class RestClient {
             }
         });
     }
+    void CreateFilterField(){
+        filterByProducer = new JButton("Search");
+        producerName = new JTextField("Type producer name");
 
+        producerName.setBounds(310,50,150, 30);
+        filterByProducer.setBounds(460,50,150, 30);
+
+        filterByProducer.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                FilterDataInTable();
+            }
+        });
+
+        userFrame.add(producerName); userFrame.add(filterByProducer);
+    }
+    void FilterDataInTable(){
+        String producerNameFromFiled = producerName.getText();
+        if(!producerNameFromFiled.isEmpty() && !producerNameFromFiled.equals("Type producer name")){
+            for(ArrayList<String> row : dataFromAPI){
+                if(!row.contains(producerNameFromFiled)) this.daneDoTabeli.remove(row);
+            }
+        }else{
+            if(producerNameFromFiled.isEmpty()){
+                this.daneDoTabeli = new ArrayList<>();
+                this.daneDoTabeli.addAll(dataFromAPI);
+            }
+        }
+        ShowTable(this.daneDoTabeli);
+    }
     void GetDataFromAPIClickedButton(){
         String startDateValue = startDate.getJFormattedTextField().getText().replace("-", "");
         String endDateValue = endDate.getJFormattedTextField().getText().replace("-", "");
         String regionNumberNumber = "";
 
         if(!startDateValue.isEmpty() && !endDateValue.isEmpty()) {
-            pojazdy = new ArrayList<>();
 
-            switch(String.valueOf(regionNumber.getSelectedItem())){
-                case "dolnośląskie":
-                    regionNumberNumber = "02";
-                    break;
-                case "kujawsko-pomorskie":
-                    regionNumberNumber = "04";
-                    break;
-                case "lubelskie":
-                    regionNumberNumber = "08";
-                    break;
-                case "lubuskie":
-                    regionNumberNumber = "10";
-                    break;
-                case "łódzkie":
-                    regionNumberNumber = "12";
-                    break;
-                case "małopolskie":
-                    regionNumberNumber = "14";
-                    break;
-                case "mazowieckie":
-                    regionNumberNumber = "16";
-                    break;
-                case "opolskie":
-                    regionNumberNumber = "16";
-                    break;
-                case "podkarpackie":
-                    regionNumberNumber = "18";
-                    break;
-                case "podlaskie":
-                    regionNumberNumber = "20";
-                    break;
-                case "pomorskie":
-                    regionNumberNumber = "22";
-                    break;
-                case "śląskie":
-                    regionNumberNumber = "24";
-                    break;
-                case "świętokrzyskie":
-                    regionNumberNumber = "26";
-                    break;
-                case "warmińsko-mazurskie":
-                    regionNumberNumber = "28";
-                    break;
-                case "wielkopolskie":
-                    regionNumberNumber = "30";
-                    break;
-                case "zachodniopomorskie":
-                    regionNumberNumber = "32";
-                    break;
-            }
+            Date startD = (Date) startDate.getModel().getValue();
+            Date endD = (Date) endDate.getModel().getValue();
 
-            try {
-                JsonObject o = cepikRepository.getPojazdy(regionNumberNumber, startDateValue, endDateValue);
-                JSONObject o1 = new JSONObject(o.toString());
+            if(!startD.after(endD) || !endD.before(startD)) {
 
-                JSONArray jsonArray = o1.getJSONArray("data");
-                for(int i=0; i<jsonArray.length();i++){
-                    JSONObject jsonObject = jsonArray.getJSONObject(i);
-                    JSONObject ob = jsonObject.getJSONObject("attributes");
-
-                    pojazdy.add(new Pojazd(
-                            ob.getString("marka"),
-                            ob.getString("kategoria-pojazdu"),
-                            ob.getString("typ"),
-                            ob.getString("model"),
-                            ob.getString("wariant"),
-                            ob.getString("rodzaj-pojazdu"),
-                            ob.getString("pochodzenie-pojazdu"),
-                            ob.getString("rok-produkcji"),
-                            ob.getString("data-pierwszej-rejestracji-w-kraju"),
-                            ob.getString("pojemnosc-skokowa-silnika"),
-                            ob.getString("masa-wlasna"),
-                            ob.getString("rodzaj-paliwa")
-                    ));
+                pojazdy = new ArrayList<>();
+                switch (String.valueOf(regionNumber.getSelectedItem())) {
+                    case "dolnośląskie":
+                        regionNumberNumber = "02";
+                        break;
+                    case "kujawsko-pomorskie":
+                        regionNumberNumber = "04";
+                        break;
+                    case "lubelskie":
+                        regionNumberNumber = "08";
+                        break;
+                    case "lubuskie":
+                        regionNumberNumber = "10";
+                        break;
+                    case "łódzkie":
+                        regionNumberNumber = "12";
+                        break;
+                    case "małopolskie":
+                        regionNumberNumber = "14";
+                        break;
+                    case "mazowieckie":
+                        regionNumberNumber = "16";
+                        break;
+                    case "opolskie":
+                        regionNumberNumber = "16";
+                        break;
+                    case "podkarpackie":
+                        regionNumberNumber = "18";
+                        break;
+                    case "podlaskie":
+                        regionNumberNumber = "20";
+                        break;
+                    case "pomorskie":
+                        regionNumberNumber = "22";
+                        break;
+                    case "śląskie":
+                        regionNumberNumber = "24";
+                        break;
+                    case "świętokrzyskie":
+                        regionNumberNumber = "26";
+                        break;
+                    case "warmińsko-mazurskie":
+                        regionNumberNumber = "28";
+                        break;
+                    case "wielkopolskie":
+                        regionNumberNumber = "30";
+                        break;
+                    case "zachodniopomorskie":
+                        regionNumberNumber = "32";
+                        break;
                 }
-                ShowTable(ConvertToDoubleArrayList(pojazdy));
-            }catch(Exception e){
-                System.out.println(e);
-            }
 
+                try {
+                    JsonObject o = cepikRepository.getPojazdy(regionNumberNumber, startDateValue, endDateValue);
+                    JSONObject o1 = new JSONObject(o.toString());
+                    JSONArray jsonArray = o1.getJSONArray("data");
+                    for (int i = 0; i < jsonArray.length(); i++) {
+                        JSONObject jsonObject = jsonArray.getJSONObject(i);
+                        JSONObject ob = jsonObject.getJSONObject("attributes");
+
+                        pojazdy.add(new Pojazd(
+                                ob.getString("marka"),
+                                ob.getString("kategoria-pojazdu"),
+                                ob.getString("typ"),
+                                ob.getString("model"),
+                                ob.getString("wariant"),
+                                ob.getString("rodzaj-pojazdu"),
+                                ob.getString("pochodzenie-pojazdu"),
+                                ob.getString("rok-produkcji"),
+                                ob.getString("data-pierwszej-rejestracji-w-kraju"),
+                                ob.getString("pojemnosc-skokowa-silnika"),
+                                ob.getString("masa-wlasna"),
+                                ob.getString("rodzaj-paliwa")
+                        ));
+                    }
+                    this.dataFromAPI = ConvertToDoubleArrayList(pojazdy);
+                    this.daneDoTabeli = ConvertToDoubleArrayList(pojazdy);
+                    ShowTable(daneDoTabeli);
+                } catch (Exception e) {
+                    System.out.println(e);
+                }
+            }else{
+                JOptionPane.showMessageDialog(userFrame,
+                        "Value of start/end date isn't correct!",
+                        "Warning!", JOptionPane.WARNING_MESSAGE);
+            }
         }else{
-            JOptionPane.showMessageDialog(
-                    userFrame,
+            JOptionPane.showMessageDialog(userFrame,
                     "Problem with null value\nin args fields start date or end date!",
-                    "Warning! Null value detected!",
-                    JOptionPane.WARNING_MESSAGE);
+                    "Warning! Null value detected!", JOptionPane.WARNING_MESSAGE);
         }
     }
-
     void CreateDatePickers(){
         modelStartDate = new UtilDateModel();
         modelEndDate = new UtilDateModel();
@@ -235,6 +265,9 @@ public class RestClient {
         regionNumber.setBounds(620, 10,150,30);
         userFrame.add(regionNumber); userFrame.add(regionInfo);
     }
+    void UpdateNumberInfoOfRows(){
+        numberOfRows.setText("Rows: " + String.valueOf(this.tableWithData.getRowCount()));
+    }
     void ShowTable(ArrayList<ArrayList<String>> dataToTable){
         if(dataToTable.size()==0) {
             JOptionPane.showMessageDialog(
@@ -259,6 +292,8 @@ public class RestClient {
 
                 this.userFrame.add(scrollPane);
 
+                this.tableWithData.setAutoCreateRowSorter(true);
+
                 userFrame.setSize(1720, 440);
                 userFrame.invalidate();
                 userFrame.validate();
@@ -267,9 +302,10 @@ public class RestClient {
                 this.model = new DefaultTableModel(ConvertDataToObject(dataToTable), nameOfColumnsFromFile.toArray());
                 this.tableWithData.setModel(model);
             }
-
         }
+        UpdateNumberInfoOfRows();
     }
+
     Object[][] ConvertDataToObject(ArrayList<ArrayList<String>> data){
         int row = data.size();
         int column = data.get(0).size();
